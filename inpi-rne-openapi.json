@@ -1,0 +1,789 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "INPI - Registre national des entreprises (RNE) - API Formalités",
+    "version": "3.0-doc-janvier-2024",
+    "description": "Spécification OpenAPI rédigée manuellement à partir de la documentation technique INPI « Accéder aux formalités données saisies JSON » (v3.0, janvier 2024). Document non officiel. Authentification en deux temps : POST /sso/login (e-mail + mot de passe du compte data.inpi.fr) renvoie un token, à envoyer ensuite en Authorization: Bearer. Le token est temporaire : en cas de 401, refaire un login. Données publiques uniquement sauf habilitation (art. L.123-52 et R.123-318 du code de commerce). Quota journalier par utilisateur (HTTP 429 si dépassé)."
+  },
+  "servers": [
+    {
+      "url": "https://registre-national-entreprises.inpi.fr/api",
+      "description": "Production"
+    },
+    {
+      "url": "https://registre-national-entreprises-pprod.inpi.fr/api",
+      "description": "Pré-production (test)"
+    }
+  ],
+  "tags": [
+    {
+      "name": "Authentification"
+    },
+    {
+      "name": "Recherche par entreprise"
+    },
+    {
+      "name": "Recherche différentielle"
+    },
+    {
+      "name": "Historique"
+    }
+  ],
+  "paths": {
+    "/sso/login": {
+      "post": {
+        "tags": [
+          "Authentification"
+        ],
+        "operationId": "login",
+        "summary": "Obtenir un token d'accès",
+        "description": "Échange l'identifiant (e-mail du compte data.inpi.fr) et le mot de passe contre un token Bearer.",
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": [
+                  "username",
+                  "password"
+                ],
+                "properties": {
+                  "username": {
+                    "type": "string",
+                    "description": "E-mail du compte utilisateur."
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "password"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Token d'accès.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string",
+                      "description": "À envoyer dans Authorization: Bearer <token>."
+                    },
+                    "user": {
+                      "type": "object",
+                      "additionalProperties": true
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Non authentifié : token absent, invalide ou expiré. Refaire un appel à /sso/login.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Erreur serveur inattendue.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/companies": {
+      "get": {
+        "tags": [
+          "Recherche par entreprise"
+        ],
+        "operationId": "searchCompanies",
+        "summary": "Rechercher des entreprises",
+        "description": "Recherche sur la totalité de la base par SIREN, dénomination, date d'immatriculation, forme d'exercice, catégorie d'activité ou code postal.",
+        "parameters": [
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "description": "Nombre de SIREN par page (1 à 100).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "page",
+            "in": "query",
+            "required": false,
+            "description": "Numéro de page.",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "default": 1
+            }
+          },
+          {
+            "name": "siren[]",
+            "in": "query",
+            "required": false,
+            "description": "Filtre exact sur un ou plusieurs numéros SIREN.",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[0-9]{9}$"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "companyName",
+            "in": "query",
+            "required": false,
+            "description": "Filtre sur la dénomination (recherche de type « contient »).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "submitDateFrom",
+            "in": "query",
+            "required": false,
+            "description": "Date d'immatriculation, borne inférieure incluse (YYYY-MM-DD).",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "submitDateTo",
+            "in": "query",
+            "required": false,
+            "description": "Date d'immatriculation, borne supérieure NON incluse (YYYY-MM-DD).",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "numnat",
+            "in": "query",
+            "required": false,
+            "description": "Numéro national du dépôt (recherche exacte).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "activitySectors",
+            "in": "query",
+            "required": false,
+            "description": "Forme d'exercice de l'entreprise.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "AGENT_COMMERCIAL",
+                "AGRICOLE_NON_ACTIF",
+                "ACTIF_AGRICOLE",
+                "ARTISANALE",
+                "ARTISANALE_REGLEMENTEE",
+                "COMMERCIALE",
+                "LIBERALE_REGLEMENTEE",
+                "LIBERALE_NON_REGLEMENTEE",
+                "GESTION_DE_BIENS",
+                "SANS_ACTIVITE"
+              ]
+            }
+          },
+          {
+            "name": "codeCategory",
+            "in": "query",
+            "required": false,
+            "description": "Code catégorie d'activité à 8 chiffres (ex. 01010101). Voir la table des catégories d'activités INPI.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{8}$"
+            }
+          },
+          {
+            "name": "zipCodes[]",
+            "in": "query",
+            "required": false,
+            "description": "Code postal ou département de l'établissement principal.",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "form",
+            "explode": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Liste d'entreprises (formalités).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Company"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requête invalide (au moins une erreur dans les paramètres).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Non authentifié : token absent, invalide ou expiré. Refaire un appel à /sso/login.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Habilitations insuffisantes pour cette requête.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Quota journalier de l'utilisateur dépassé.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Erreur serveur inattendue.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/companies/{siren}": {
+      "get": {
+        "tags": [
+          "Recherche par entreprise",
+          "Historique"
+        ],
+        "operationId": "getCompany",
+        "summary": "Détail d'une entreprise (état à jour ou à une date passée)",
+        "description": "Sans paramètre date : état à jour. Avec date : état de l'entreprise à cette date (API historique).",
+        "parameters": [
+          {
+            "name": "siren",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{9}$"
+            },
+            "description": "Numéro SIREN (9 chiffres)."
+          },
+          {
+            "name": "date",
+            "in": "query",
+            "required": false,
+            "description": "Date de l'état recherché (YYYY-MM-DD). Optionnel.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Formalité complète de l'entreprise.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Company"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requête invalide (au moins une erreur dans les paramètres).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Non authentifié : token absent, invalide ou expiré. Refaire un appel à /sso/login.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Habilitations insuffisantes pour cette requête.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Quota journalier de l'utilisateur dépassé.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Erreur serveur inattendue.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/companies/diff": {
+      "get": {
+        "tags": [
+          "Recherche différentielle"
+        ],
+        "operationId": "diffCompanies",
+        "summary": "Entreprises créées ou modifiées sur une période (flux)",
+        "description": "Pagination par curseur : pour la page suivante, reprendre le SIREN indiqué dans le header de réponse « pagination-search-after » et le passer dans searchAfter. Limite technique de 10 000 résultats par requête ; utiliser /companies/diff/count pour vérifier.",
+        "parameters": [
+          {
+            "name": "pageSize",
+            "in": "query",
+            "required": false,
+            "description": "Nombre de SIREN par page (1 à 100).",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 100,
+              "default": 20
+            }
+          },
+          {
+            "name": "searchAfter",
+            "in": "query",
+            "required": false,
+            "description": "SIREN à partir duquel reprendre. Ne pas renseigner au premier appel.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "siren[]",
+            "in": "query",
+            "required": false,
+            "description": "Filtre exact sur un ou plusieurs numéros SIREN.",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^[0-9]{9}$"
+              }
+            },
+            "style": "form",
+            "explode": true
+          },
+          {
+            "name": "companyName",
+            "in": "query",
+            "required": false,
+            "description": "Filtre sur la dénomination (recherche de type « contient »).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "Date de modification, non incluse (YYYY-MM-DD). Par défaut : la veille.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "Date de modification, incluse (YYYY-MM-DD). Par défaut : aujourd'hui.",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "numnat",
+            "in": "query",
+            "required": false,
+            "description": "Numéro national du dépôt (recherche exacte).",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "activitySectors",
+            "in": "query",
+            "required": false,
+            "description": "Forme d'exercice de l'entreprise.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "AGENT_COMMERCIAL",
+                "AGRICOLE_NON_ACTIF",
+                "ACTIF_AGRICOLE",
+                "ARTISANALE",
+                "ARTISANALE_REGLEMENTEE",
+                "COMMERCIALE",
+                "LIBERALE_REGLEMENTEE",
+                "LIBERALE_NON_REGLEMENTEE",
+                "GESTION_DE_BIENS",
+                "SANS_ACTIVITE"
+              ]
+            }
+          },
+          {
+            "name": "codeCategory",
+            "in": "query",
+            "required": false,
+            "description": "Code catégorie d'activité à 8 chiffres (ex. 01010101). Voir la table des catégories d'activités INPI.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{8}$"
+            }
+          },
+          {
+            "name": "zipCodes[]",
+            "in": "query",
+            "required": false,
+            "description": "Code postal ou département de l'établissement principal.",
+            "schema": {
+              "type": "array",
+              "items": {
+                "type": "string"
+              }
+            },
+            "style": "form",
+            "explode": true
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Liste d'entreprises modifiées.",
+            "headers": {
+              "pagination-search-after": {
+                "description": "SIREN à passer dans searchAfter pour obtenir la page suivante.",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            },
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Company"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requête invalide (au moins une erreur dans les paramètres).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Non authentifié : token absent, invalide ou expiré. Refaire un appel à /sso/login.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Habilitations insuffisantes pour cette requête.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Quota journalier de l'utilisateur dépassé.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Erreur serveur inattendue.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/companies/diff/count": {
+      "get": {
+        "tags": [
+          "Recherche différentielle"
+        ],
+        "operationId": "countDiffCompanies",
+        "summary": "Compter les formalités sur une période",
+        "description": "Renvoie le nombre exact si inférieur à 10 000, sinon isNbResultsOver10000 = true.",
+        "parameters": [
+          {
+            "name": "from",
+            "in": "query",
+            "required": false,
+            "description": "Date de modification, non incluse (YYYY-MM-DD).",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "to",
+            "in": "query",
+            "required": false,
+            "description": "Date de modification, incluse (YYYY-MM-DD).",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Nombre de résultats.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "nbResults": {
+                      "type": "integer"
+                    },
+                    "isNbResultsOver10000": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Requête invalide (au moins une erreur dans les paramètres).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Non authentifié : token absent, invalide ou expiré. Refaire un appel à /sso/login.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Habilitations insuffisantes pour cette requête.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "Quota journalier de l'utilisateur dépassé.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Erreur serveur inattendue.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "Token obtenu via POST /sso/login (e-mail + mot de passe du compte data.inpi.fr)."
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "additionalProperties": true
+      },
+      "Company": {
+        "type": "object",
+        "description": "Formalité d'une entreprise (champs principaux ; le JSON complet contient davantage de blocs, voir le dictionnaire de données INPI).",
+        "additionalProperties": true,
+        "properties": {
+          "siren": {
+            "type": "string"
+          },
+          "diffusionINSEE": {
+            "type": "string",
+            "description": "Indique si l'entreprise est diffusable."
+          },
+          "typePersonne": {
+            "type": "string",
+            "description": "Personne physique ou morale."
+          },
+          "diffusionCommerciale": {
+            "type": "boolean",
+            "description": "Non-opposition à la diffusion commerciale."
+          },
+          "content": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Données de l'entreprise : natureCreation (dateCreation, formeJuridique...), personnePhysique, personneMorale (dénomination, dirigeants, capital...), exploitation, evenementCessation, piecesJointes.",
+            "properties": {
+              "evenementCessation": {
+                "type": "string"
+              },
+              "natureCessation": {
+                "type": "string"
+              },
+              "formeExerciceActivitePrincipale": {
+                "type": "string"
+              },
+              "natureCreation": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "personnePhysique": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "personneMorale": {
+                "type": "object",
+                "additionalProperties": true
+              },
+              "exploitation": {
+                "type": "object",
+                "additionalProperties": true
+              }
+            }
+          },
+          "historique": {
+            "type": "object",
+            "additionalProperties": true,
+            "description": "Historique des événements de l'entreprise."
+          }
+        }
+      }
+    }
+  },
+  "security": [
+    {
+      "bearerAuth": []
+    }
+  ]
+}
