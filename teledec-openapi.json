@@ -1,0 +1,400 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Teledec - API partenaires (consultation des déclarations)",
+    "version": "doc-partenaire-1",
+    "description": "Spécification OpenAPI rédigée manuellement à partir de la documentation partenaire Teledec. Document non officiel, limité à deux endpoints de CONSULTATION (aucune création ni transmission de déclaration). Authentification OAuth2 client_credentials : token JWT valable 1 heure, à envoyer en Authorization: Bearer. Les scopes sont préfixés par l'environnement (stage/ ou prod/) et ne sont attribués que selon les besoins du partenaire."
+  },
+  "servers": [
+    {
+      "url": "https://stage.teledec.fr",
+      "description": "Recette / test (scopes stage/...). URL déduite de la documentation, à confirmer."
+    },
+    {
+      "url": "https://teledec.fr",
+      "description": "Production (scopes prod/...). URL déduite de la documentation, à confirmer."
+    }
+  ],
+  "paths": {
+    "/service/declarations": {
+      "get": {
+        "operationId": "listDeclarations",
+        "summary": "Liste des déclarations d'un SIREN",
+        "description": "Retourne toutes les déclarations d'un SIREN rattaché à un compte utilisateur Teledec, avec statut et liens temporaires vers les PDF (déclaration, accusé de réception) et le fichier EDI.",
+        "security": [
+          {
+            "oauth2": [
+              "stage/liste-declarations",
+              "prod/liste-declarations"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "siren",
+            "in": "query",
+            "required": true,
+            "description": "SIREN de l'entreprise.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{9}$"
+            }
+          },
+          {
+            "name": "email",
+            "in": "query",
+            "required": true,
+            "description": "E-mail du compte utilisateur auquel est rattaché le SIREN.",
+            "schema": {
+              "type": "string",
+              "format": "email"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Liste des déclarations (éventuellement vide).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Declaration"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Mauvais formatage de la requête (paramètre manquant, mauvais format de date...).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Erreur d'authentification : token invalide ou expiré (validité 1 h). Redemander un token puis rejouer l'appel.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Aucune déclaration trouvée avec les critères fournis.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Erreur interne côté Teledec.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/service/recuperation-liste-compterendus": {
+      "get": {
+        "operationId": "listCompteRendus",
+        "summary": "Accusés de dépose et certificats de rejet d'une déclaration",
+        "description": "Liste les accusés de dépose ou certificats de rejet d'une déclaration, identifiée par SIREN, date de fin d'exercice ou de période, et formulaire principal.",
+        "security": [
+          {
+            "oauth2": [
+              "stage/liste-cr",
+              "prod/liste-cr"
+            ]
+          }
+        ],
+        "parameters": [
+          {
+            "name": "siren",
+            "in": "query",
+            "required": true,
+            "description": "SIREN de l'entreprise.",
+            "schema": {
+              "type": "string",
+              "pattern": "^[0-9]{9}$"
+            }
+          },
+          {
+            "name": "dateFin",
+            "in": "query",
+            "required": true,
+            "description": "Date de fin d'exercice comptable ou de période (YYYY-MM-DD).",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "formulaire",
+            "in": "query",
+            "required": true,
+            "description": "Formulaire principal. « liasse » = tout type de liasse fiscale autre que paiement ou TVA.",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "liasse",
+                "2571",
+                "2572",
+                "2573",
+                "3310CA3",
+                "3517SCA12",
+                "3514",
+                "3519",
+                "3517BCA12A",
+                "1329AC",
+                "1329DEF",
+                "DAS2",
+                "2257",
+                "2258"
+              ]
+            }
+          },
+          {
+            "name": "date_echeance",
+            "in": "query",
+            "required": false,
+            "description": "Date d'échéance, pour les déclarations de paiement (TVA, IS).",
+            "schema": {
+              "type": "string",
+              "format": "date"
+            }
+          },
+          {
+            "name": "email",
+            "in": "query",
+            "required": true,
+            "description": "E-mail du compte partenaire (obligatoire avec l'authentification par token JWT).",
+            "schema": {
+              "type": "string",
+              "format": "email"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Liste des comptes-rendus (éventuellement vide).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CompteRendu"
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Mauvais formatage de la requête (paramètre manquant, mauvais format de date...).",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Erreur d'authentification : token invalide ou expiré (validité 1 h). Redemander un token puis rejouer l'appel.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Aucune déclaration trouvée avec les critères fournis.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Erreur interne côté Teledec.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "additionalProperties": true
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "oauth2": {
+        "type": "oauth2",
+        "description": "OAuth2 client_credentials. Le clientId/clientSecret est envoyé en Authorization: Basic base64(clientId:clientSecret), body x-www-form-urlencoded grant_type=client_credentials (+ scope optionnel). Token valable 3600 s.",
+        "flows": {
+          "clientCredentials": {
+            "tokenUrl": "https://auth.partners.teledec.fr/oauth2/token",
+            "scopes": {
+              "stage/liste-declarations": "Liste des déclarations (recette)",
+              "prod/liste-declarations": "Liste des déclarations (production)",
+              "stage/liste-cr": "Comptes-rendus DGFiP (recette)",
+              "prod/liste-cr": "Comptes-rendus DGFiP (production)"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "Declaration": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "id": {
+            "type": "integer"
+          },
+          "label": {
+            "type": "string"
+          },
+          "declarationType": {
+            "type": "string",
+            "description": "Ex. Liasse."
+          },
+          "dateDebut": {
+            "type": "string",
+            "format": "date"
+          },
+          "dateFin": {
+            "type": "string",
+            "format": "date"
+          },
+          "dateHeureCreation": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "status": {
+            "type": "string",
+            "description": "Ex. Accepted."
+          },
+          "timestampRetourDGFIP": {
+            "type": "string",
+            "description": "Absent si la déclaration n'a pas été envoyée."
+          },
+          "lienDeclaration": {
+            "type": "string"
+          },
+          "lienDeclarationPDF": {
+            "type": "string"
+          },
+          "lienAccuseDeReceptionPDF": {
+            "type": "string",
+            "description": "Présent uniquement si un retour DGFiP a été reçu."
+          },
+          "lienFichierEDI": {
+            "type": "string",
+            "description": "Absent si la déclaration n'a pas été envoyée."
+          }
+        }
+      },
+      "CompteRendu": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "declarationId": {
+            "type": "integer"
+          },
+          "reference": {
+            "type": "string"
+          },
+          "siren": {
+            "type": "string"
+          },
+          "nom": {
+            "type": "string"
+          },
+          "dateHeureDGFiP": {
+            "type": "string"
+          },
+          "declarationType": {
+            "type": "string",
+            "description": "Ex. TVA."
+          },
+          "formulaire": {
+            "type": "string"
+          },
+          "dateDebut": {
+            "type": "string",
+            "format": "date"
+          },
+          "dateFin": {
+            "type": "string",
+            "format": "date"
+          },
+          "dateEcheance": {
+            "type": "string",
+            "format": "date"
+          },
+          "status": {
+            "type": "string",
+            "description": "OK ou ERREUR."
+          },
+          "statusLibelle": {
+            "type": "string"
+          },
+          "declarationStatus": {
+            "type": "string"
+          },
+          "compte": {
+            "type": "string"
+          },
+          "referenceDGFiP": {
+            "type": "string"
+          },
+          "numeroTraitementDGFiP": {
+            "type": "string"
+          },
+          "rof": {
+            "type": "string"
+          },
+          "pdf": {
+            "type": "string",
+            "description": "PDF encodé en base64."
+          },
+          "erreurCode": {
+            "type": "string"
+          },
+          "erreurLibelle": {
+            "type": "string"
+          }
+        }
+      }
+    }
+  }
+}
